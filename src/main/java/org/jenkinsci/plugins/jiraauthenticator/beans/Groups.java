@@ -3,6 +3,12 @@ package org.jenkinsci.plugins.jiraauthenticator.beans;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Bean class for response parsing.
+ * 
+ * @author stephan.watermeyer
+ *
+ */
 public class Groups {
 
     String size;
@@ -30,7 +36,7 @@ public class Groups {
 
     @Override
     public String toString() {
-        String retVal = "Groups [size=" + size + ", items=";
+        String retVal = "Groups [size=" + size + ", Items [";
         for (Item current : getItems()) {
             retVal += current.toString() + ", ";
         }

@@ -33,5 +33,5 @@ THE SOFTWARE.
 	</f:entry>
 	
 	<f:validateButton method="testConnection" title="${%Check Connection}"
-		with="url,technicalUserName,technicalUserPassword,timeout" />
+		with="url,credentialsId,timeout" />
 </j:jelly>

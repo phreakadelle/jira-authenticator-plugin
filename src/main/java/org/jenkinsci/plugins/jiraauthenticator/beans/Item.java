@@ -1,5 +1,11 @@
 package org.jenkinsci.plugins.jiraauthenticator.beans;
 
+/**
+ * Bean class for response parsing.
+ * 
+ * @author stephan.watermeyer
+ *
+ */
 public class Item {
 
     String name;

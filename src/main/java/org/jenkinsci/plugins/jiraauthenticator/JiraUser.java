@@ -1,18 +1,20 @@
 package org.jenkinsci.plugins.jiraauthenticator;
 
 import java.util.List;
-import java.util.logging.Logger;
 
 import org.acegisecurity.GrantedAuthority;
 import org.acegisecurity.userdetails.UserDetails;
 
+/**
+ * Jira User.
+ * 
+ * @author stephan.watermeyer
+ *
+ */
 public class JiraUser implements UserDetails {
 
     private static final long serialVersionUID = 485415736315753530L;
-    
-    /** Used for logging purposes. */
-    private static final Logger LOG = Logger.getLogger(JiraUser.class.getName());
-    
+
     String user;
     String password;
     List<GrantedAuthority> grantedAuthorities;
@@ -26,9 +28,7 @@ public class JiraUser implements UserDetails {
 
     @Override
     public GrantedAuthority[] getAuthorities() {
-        GrantedAuthority[] retVal = grantedAuthorities.toArray(new GrantedAuthority[this.grantedAuthorities.size()]);
-        LOG.info("getAuthorities: " + retVal.length);
-        return retVal;
+        return grantedAuthorities.toArray(new GrantedAuthority[this.grantedAuthorities.size()]);
     }
 
     @Override

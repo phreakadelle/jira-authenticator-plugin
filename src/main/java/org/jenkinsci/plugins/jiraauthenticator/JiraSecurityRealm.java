@@ -38,6 +38,13 @@ import hudson.util.FormValidation;
 import hudson.util.ListBoxModel;
 import jenkins.model.Jenkins;
 
+/**
+ * This class contains functionality to display the configuration page inside "Configure Security". Also it contains the
+ * functionality to "authorize" a user and "loadUserByUsername" which retrieves the users groups.
+ * 
+ * @author stephan.watermeyer
+ *
+ */
 public class JiraSecurityRealm extends AbstractPasswordBasedSecurityRealm {
 
     /** Used for logging purposes. */
@@ -120,6 +127,12 @@ public class JiraSecurityRealm extends AbstractPasswordBasedSecurityRealm {
         return null;
     }
 
+    /**
+     * This is the dialogue that is displayed in the "Configure Security" page.
+     * 
+     * @author stephan.watermeyer
+     *
+     */
     @Extension
     public static final class DescriptorImpl extends Descriptor<SecurityRealm> {
 
@@ -167,15 +180,14 @@ public class JiraSecurityRealm extends AbstractPasswordBasedSecurityRealm {
                     Collections.<DomainRequirement> emptyList(), CredentialsMatchers.instanceOf(StandardUsernamePasswordCredentials.class));
         }
 
-        
-        public FormValidation doTestConnection(@QueryParameter String url, @QueryParameter final String credentialsId, 
-                @QueryParameter final Integer timeout) {
+        public FormValidation doTestConnection(@QueryParameter String url, @QueryParameter final String credentialsId, @QueryParameter final Integer timeout) {
             final UsernamePasswordCredentialsImpl c = getCredentials(credentialsId);
             JiraAuthenticationService service = new JiraAuthenticationService(url, c.getUsername(), c.getPassword().getPlainText(), timeout);
             try {
                 service.authenticate(c.getUsername(), c.getPassword().getPlainText());
                 return FormValidation.ok("Connection successful");
             } catch (Exception e) {
+                LOG.log(Level.WARNING, "validating technical user for jira auth failed", e);
                 return FormValidation.error("Failed to Authenticate your user: " + e.getMessage());
             }
         }

@@ -30,7 +30,18 @@ import com.sun.jersey.api.client.config.ClientConfig;
 import com.sun.jersey.api.client.config.DefaultClientConfig;
 import com.sun.jersey.api.client.filter.HTTPBasicAuthFilter;
 
+/**
+ * Service class wraps the functionality to connect to a Jira instance. This class makes use of a technical user that is
+ * used to contact Jira.
+ * 
+ * @author stephan.watermeyer
+ *
+ */
 public class JiraAuthenticationService {
+
+    private static final String PARAM_VAL_GROUPS = "groups";
+    private static final String PARAM_KEY_EXPAND = "expand";
+    private static final String PARAM_KEY_USERNAME = "username";
 
     private static final Logger LOG = Logger.getLogger(JiraSecurityRealm.class.getName());
     private final String mUrl;
@@ -38,6 +49,18 @@ public class JiraAuthenticationService {
     private final String mTechnicalUserPassword;
     private final Integer mTimeoutInMS;
 
+    /**
+     * Default constructor.
+     * 
+     * @param url
+     *            the URL of Jira.
+     * @param pTechnicalUserName
+     *            technical user name
+     * @param pTechnicalUserPassword
+     *            password of the technical user.
+     * @param pTimeoutInMS
+     *            timeout in MS
+     */
     public JiraAuthenticationService(String url, String pTechnicalUserName, String pTechnicalUserPassword, Integer pTimeoutInMS) {
         super();
         this.mUrl = url;
@@ -47,17 +70,39 @@ public class JiraAuthenticationService {
         init();
     }
 
+    /**
+     * Get a user gruops
+     * 
+     * @param pUsername
+     *            the user whos groups should be loaded
+     * @return response from Jira
+     * @throws AuthenticationException
+     *             TBD.
+     */
     public JiraResponseGeneral loadUserByUsername(final String pUsername) throws AuthenticationException {
         final MultivaluedMap<String, String> requestParams = new MultivaluedHashMap<String, String>();
-        requestParams.putSingle("username", pUsername);
-        requestParams.putSingle("expand", "groups");
+        requestParams.putSingle(PARAM_KEY_USERNAME, pUsername);
+        requestParams.putSingle(PARAM_KEY_EXPAND, PARAM_VAL_GROUPS);
+
+        // use the technical user to retrieve the groups of a given username.
         return callService(mTechnicalUserName, mTechnicalUserPassword, requestParams);
     }
 
+    /**
+     * To authenticate a user.
+     * 
+     * @param pUsername
+     *            the users username.
+     * @param pPassword
+     *            the users password in clear text.
+     * @return the parsed response from Jira
+     * @throws AuthenticationException
+     *             if something goes wrong.
+     */
     public JiraResponseGeneral authenticate(final String pUsername, final String pPassword) throws AuthenticationException {
         final MultivaluedMap<String, String> requestParams = new MultivaluedHashMap<String, String>();
-        requestParams.putSingle("username", pUsername);
-        
+        requestParams.putSingle(PARAM_KEY_USERNAME, pUsername);
+
         // here we pass the given credentials. because we dont want to authorize the technical user
         return callService(pUsername, pPassword, requestParams);
     }
@@ -92,7 +137,7 @@ public class JiraAuthenticationService {
             return parsedResponsed;
         } catch (ClientHandlerException e) {
             if (e.getCause() != null && e.getCause() instanceof SocketTimeoutException) {
-                throw new AuthenticationServiceException("timeout: " + e.getMessage(), e);
+                throw new AuthenticationServiceException("Timeout limit reached while contacing Jira: " + mTimeoutInMS + "ms", e);
             } else {
                 LOG.log(Level.WARNING, "the answer from jira is unexpected: " + e.getMessage(), e);
                 throw new AuthenticationServiceException("format error: " + e.getMessage(), e);
@@ -111,6 +156,9 @@ public class JiraAuthenticationService {
         }
     }
 
+    /**
+     * To accept all (self-signed) HTTPs certificates.
+     */
     void init() {
         // Create a trust manager that does not validate certificate chains
         TrustManager[] trustAllCerts = new TrustManager[] {new X509TrustManager() {
