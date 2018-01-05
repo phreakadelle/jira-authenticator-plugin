@@ -1,32 +1,42 @@
 package org.jenkinsci.plugins.jiraauthenticator;
 
-import java.net.SocketTimeoutException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.acegisecurity.AuthenticationException;
+import org.acegisecurity.AuthenticationServiceException;
 import org.acegisecurity.GrantedAuthority;
 import org.acegisecurity.GrantedAuthorityImpl;
 import org.acegisecurity.userdetails.UserDetails;
 import org.acegisecurity.userdetails.UsernameNotFoundException;
+import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.plugins.jiraauthenticator.beans.Item;
 import org.jenkinsci.plugins.jiraauthenticator.beans.JiraResponseGeneral;
+import org.kohsuke.stapler.AncestorInPath;
 import org.kohsuke.stapler.DataBoundConstructor;
+import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.QueryParameter;
 import org.springframework.dao.DataAccessException;
-import org.springframework.dao.DataRetrievalFailureException;
 
-import com.sun.jersey.api.client.ClientHandlerException;
-import com.sun.jersey.api.client.UniformInterfaceException;
+import com.cloudbees.plugins.credentials.CredentialsMatchers;
+import com.cloudbees.plugins.credentials.CredentialsProvider;
+import com.cloudbees.plugins.credentials.common.StandardListBoxModel;
+import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
+import com.cloudbees.plugins.credentials.domains.DomainRequirement;
+import com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl;
 
 import hudson.Extension;
 import hudson.model.Descriptor;
+import hudson.security.ACL;
 import hudson.security.AbstractPasswordBasedSecurityRealm;
 import hudson.security.GroupDetails;
 import hudson.security.SecurityRealm;
 import hudson.util.FormValidation;
+import hudson.util.ListBoxModel;
+import jenkins.model.Jenkins;
 
 public class JiraSecurityRealm extends AbstractPasswordBasedSecurityRealm {
 
@@ -34,61 +44,74 @@ public class JiraSecurityRealm extends AbstractPasswordBasedSecurityRealm {
     private static final Logger LOG = Logger.getLogger(JiraSecurityRealm.class.getName());
 
     private String url;
+    private String credentialsId;
+    private Integer timeout;
 
     @DataBoundConstructor
-    public JiraSecurityRealm(String url) {
-        this.url = url.trim();
+    public JiraSecurityRealm(String url, String credentialsId, Integer timeout) {
+        this.url = url;
+        this.credentialsId = credentialsId;
+        this.timeout = timeout;
     }
 
     @Override
     protected UserDetails authenticate(String pUsername, String pPassword) throws AuthenticationException {
         if (LOG.isLoggable(Level.FINE)) {
-            LOG.fine("Authenticate user '" + pUsername + "' using password '" + (null != pPassword ? "<available>'" : "<not specified>'"));
+            LOG.fine("Authenticate user '" + pUsername + "' using password '" + (!StringUtils.isEmpty(pPassword) ? "<available>'" : "<not specified>'"));
         }
 
-        // create the list of granted authorities
-        List<GrantedAuthority> authorities = new ArrayList<GrantedAuthority>();
-
         try {
-
-            JiraAuthenticationService service = new JiraAuthenticationService(url);
+            final UsernamePasswordCredentialsImpl c = getCredentials(getCredentialsId());
+            JiraAuthenticationService service = new JiraAuthenticationService(url, c.getUsername(), c.getPassword().getPlainText(), timeout);
             JiraResponseGeneral serviceResponse = service.authenticate(pUsername, pPassword);
 
-            for (Item current : serviceResponse.getGroups().getItems()) {
-                authorities.add(new GrantedAuthorityImpl(current.getName()));
-            }
-
-            // finally
+            final List<GrantedAuthority> authorities = new ArrayList<GrantedAuthority>();
             authorities.add(SecurityRealm.AUTHENTICATED_AUTHORITY);
-
             return new JiraUser(serviceResponse.getName(), pPassword, authorities);
-        } catch (ClientHandlerException e) {
-            if (e.getCause() != null && e.getCause() instanceof SocketTimeoutException) {
-                throw new DataRetrievalFailureException("timeout: " + e.getMessage(), e);
-            } else {
-                LOG.log(Level.WARNING, "the answer from jira is unexpected: " + e.getMessage(), e);
-                throw new DataRetrievalFailureException("format error: " + e.getMessage(), e);
+        } catch (AuthenticationException e) {
+            if (LOG.isLoggable(Level.FINE)) {
+                LOG.log(Level.FINE, e.getMessage(), e);
             }
-        } catch (UniformInterfaceException e) {
-            LOG.log(Level.WARNING, e.getMessage(), e);
-            if (e.getMessage().contains("403")) {
-                LOG.fine("Authenticate user '" + pUsername + "' failed with HTTP 403'");
-                throw new UsernameNotFoundException(pUsername, e);
-            }
-            throw new DataRetrievalFailureException("response error" + e.getMessage(), e);
+            throw e;
         } catch (Exception e) {
             LOG.log(Level.WARNING, e.getMessage(), e);
-            throw new DataRetrievalFailureException("general error" + e.getMessage(), e);
+            throw new AuthenticationServiceException("general error: " + e.getMessage(), e);
         }
     }
 
     @Override
     public UserDetails loadUserByUsername(String pUsername) throws UsernameNotFoundException, DataAccessException {
-        LOG.fine("loadUserByUsername '" + pUsername);
-        List<GrantedAuthority> authorities = new ArrayList<GrantedAuthority>();
-        authorities.add(SecurityRealm.AUTHENTICATED_AUTHORITY);
-        authorities.add(new GrantedAuthorityImpl("x"));
-        return new JiraUser("abc", "123", authorities);
+        if (LOG.isLoggable(Level.FINE)) {
+            LOG.fine("loadUserByUsername '" + pUsername + "'");
+        }
+
+        // FIXME: Why does Jenkins call it like this.
+        if ("MANAGE_DOMAINS".equalsIgnoreCase(pUsername)) {
+            throw new UsernameNotFoundException("not supported");
+        }
+
+        try {
+            final UsernamePasswordCredentialsImpl c = getCredentials(getCredentialsId());
+            JiraAuthenticationService service = new JiraAuthenticationService(url, c.getUsername(), c.getPassword().getPlainText(), timeout);
+            JiraResponseGeneral serviceResponse = service.loadUserByUsername(pUsername);
+
+            final List<GrantedAuthority> authorities = new ArrayList<GrantedAuthority>();
+            authorities.add(SecurityRealm.AUTHENTICATED_AUTHORITY);
+
+            for (Item current : serviceResponse.getGroups().getItems()) {
+                authorities.add(new GrantedAuthorityImpl(current.getName()));
+            }
+
+            return new JiraUser(serviceResponse.getName(), "", authorities);
+        } catch (AuthenticationException e) {
+            if (LOG.isLoggable(Level.FINE)) {
+                LOG.log(Level.FINE, e.getMessage(), e);
+            }
+            throw e;
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, e.getMessage(), e);
+            throw new AuthenticationServiceException("general error: " + e.getMessage(), e);
+        }
     }
 
     @Override
@@ -99,6 +122,7 @@ public class JiraSecurityRealm extends AbstractPasswordBasedSecurityRealm {
 
     @Extension
     public static final class DescriptorImpl extends Descriptor<SecurityRealm> {
+
         /**
          * Default constructor.
          */
@@ -106,25 +130,54 @@ public class JiraSecurityRealm extends AbstractPasswordBasedSecurityRealm {
             super(JiraSecurityRealm.class);
         }
 
-        /**
-         * Performs on-the-fly validation of the form field 'url'.
-         * 
-         * @param url
-         *            The URL of the Crowd server.
-         * 
-         * @return Indicates the outcome of the validation. This is sent to the
-         *         browser.
-         */
         public FormValidation doCheckUrl(@QueryParameter final String url) {
-            if (0 == url.length()) {
-                return FormValidation.error("Bla");
+            if (StringUtils.isEmpty(url)) {
+                return FormValidation.error("The URL of Jira must not be null.");
             }
 
             return FormValidation.ok();
         }
 
-        public FormValidation doTestConnection(@QueryParameter String url) {
+        public FormValidation doCheckUser(@QueryParameter final String user) {
+            if (StringUtils.isEmpty(user)) {
+                return FormValidation.error("The User of Jira must not be null.");
+            }
+
             return FormValidation.ok();
+        }
+
+        public FormValidation doCheckPassword(@QueryParameter final String password) {
+            if (StringUtils.isEmpty(password)) {
+                return FormValidation.error("The Password of Jira must not be null.");
+            }
+
+            return FormValidation.ok();
+        }
+
+        public FormValidation doCheckTimeout(@QueryParameter final String timeout) {
+            if (StringUtils.isEmpty(timeout)) {
+                return FormValidation.error("The Timeout of Jira must not be null.");
+            }
+
+            return FormValidation.ok();
+        }
+
+        public ListBoxModel doFillCredentialsIdItems(@AncestorInPath Item instance) {
+            return new StandardListBoxModel().includeEmptyValue().includeMatchingAs(ACL.SYSTEM, (hudson.model.Item) instance, StandardUsernamePasswordCredentials.class,
+                    Collections.<DomainRequirement> emptyList(), CredentialsMatchers.instanceOf(StandardUsernamePasswordCredentials.class));
+        }
+
+        
+        public FormValidation doTestConnection(@QueryParameter String url, @QueryParameter final String credentialsId, 
+                @QueryParameter final Integer timeout) {
+            final UsernamePasswordCredentialsImpl c = getCredentials(credentialsId);
+            JiraAuthenticationService service = new JiraAuthenticationService(url, c.getUsername(), c.getPassword().getPlainText(), timeout);
+            try {
+                service.authenticate(c.getUsername(), c.getPassword().getPlainText());
+                return FormValidation.ok("Connection successful");
+            } catch (Exception e) {
+                return FormValidation.error("Failed to Authenticate your user: " + e.getMessage());
+            }
         }
 
         /**
@@ -138,8 +191,37 @@ public class JiraSecurityRealm extends AbstractPasswordBasedSecurityRealm {
         }
     }
 
+    public static UsernamePasswordCredentialsImpl getCredentials(final String pCredentialId) {
+        return CredentialsMatchers.firstOrNull(
+                CredentialsProvider.lookupCredentials(UsernamePasswordCredentialsImpl.class, Jenkins.getInstance(), ACL.SYSTEM, Collections.<DomainRequirement> emptyList()),
+                CredentialsMatchers.allOf(CredentialsMatchers.withId(pCredentialId)));
+    }
+
     public String getUrl() {
         return url;
+    }
+
+    public String getCredentialsId() {
+        return credentialsId;
+    }
+
+    public Integer getTimeout() {
+        return timeout;
+    }
+
+    @DataBoundSetter
+    public void setCredentialsId(String credentialsId) {
+        this.credentialsId = credentialsId;
+    }
+
+    @DataBoundSetter
+    public void setTimeout(Integer timeout) {
+        this.timeout = timeout;
+    }
+
+    @DataBoundSetter
+    public void setUrl(String url) {
+        this.url = url;
     }
 
 }

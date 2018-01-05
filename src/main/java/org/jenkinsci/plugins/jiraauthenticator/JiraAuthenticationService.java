@@ -16,10 +16,10 @@ import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.UriBuilder;
 
 import org.acegisecurity.AuthenticationException;
-import org.acegisecurity.userdetails.UsernameNotFoundException;
+import org.acegisecurity.AuthenticationServiceException;
+import org.acegisecurity.BadCredentialsException;
 import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.plugins.jiraauthenticator.beans.JiraResponseGeneral;
-import org.springframework.dao.DataRetrievalFailureException;
 
 import com.google.gson.Gson;
 import com.sun.jersey.api.client.Client;
@@ -32,19 +32,38 @@ import com.sun.jersey.api.client.filter.HTTPBasicAuthFilter;
 
 public class JiraAuthenticationService {
 
-    private static final int TIMEOUT_IN_MS = 10000;
     private static final Logger LOG = Logger.getLogger(JiraSecurityRealm.class.getName());
-    private String mUrl;
+    private final String mUrl;
+    private final String mTechnicalUserName;
+    private final String mTechnicalUserPassword;
+    private final Integer mTimeoutInMS;
 
-    public JiraAuthenticationService(String url) {
+    public JiraAuthenticationService(String url, String pTechnicalUserName, String pTechnicalUserPassword, Integer pTimeoutInMS) {
         super();
         this.mUrl = url;
+        this.mTechnicalUserName = pTechnicalUserName;
+        this.mTechnicalUserPassword = pTechnicalUserPassword;
+        this.mTimeoutInMS = pTimeoutInMS;
         init();
     }
 
-    public JiraResponseGeneral authenticate(String pUsername, String pPassword) throws AuthenticationException {
-        try {
+    public JiraResponseGeneral loadUserByUsername(final String pUsername) throws AuthenticationException {
+        final MultivaluedMap<String, String> requestParams = new MultivaluedHashMap<String, String>();
+        requestParams.putSingle("username", pUsername);
+        requestParams.putSingle("expand", "groups");
+        return callService(mTechnicalUserName, mTechnicalUserPassword, requestParams);
+    }
 
+    public JiraResponseGeneral authenticate(final String pUsername, final String pPassword) throws AuthenticationException {
+        final MultivaluedMap<String, String> requestParams = new MultivaluedHashMap<String, String>();
+        requestParams.putSingle("username", pUsername);
+        
+        // here we pass the given credentials. because we dont want to authorize the technical user
+        return callService(pUsername, pPassword, requestParams);
+    }
+
+    JiraResponseGeneral callService(final String pUsername, final String pPassword, MultivaluedMap<String, String> pRequestParams) {
+        try {
             ClientConfig config = new DefaultClientConfig();
             Client client = Client.create(config);
 
@@ -52,18 +71,14 @@ public class JiraAuthenticationService {
                 LOG.fine("setting username to: " + pUsername);
                 client.addFilter(new HTTPBasicAuthFilter(pUsername, pPassword));
             } else {
-                throw new DataRetrievalFailureException("no username and password provided");
+                throw new AuthenticationServiceException("no username and password provided");
             }
 
-            client.setReadTimeout(TIMEOUT_IN_MS);
+            client.setReadTimeout(mTimeoutInMS);
             WebResource mInstance = client.resource(UriBuilder.fromUri(mUrl).build());
             mInstance = mInstance.path("rest/api/2/user/");
 
-            final MultivaluedMap<String, String> requestParams = new MultivaluedHashMap<String, String>();
-            requestParams.putSingle("username", pUsername);
-            requestParams.putSingle("expand", "groups");
-
-            final String serviceResponse = mInstance.queryParams(requestParams).accept(MediaType.APPLICATION_JSON).get(String.class);
+            final String serviceResponse = mInstance.queryParams(pRequestParams).accept(MediaType.APPLICATION_JSON).get(String.class);
             if (LOG.isLoggable(Level.FINE)) {
                 LOG.fine(serviceResponse.toString());
             }
@@ -77,24 +92,26 @@ public class JiraAuthenticationService {
             return parsedResponsed;
         } catch (ClientHandlerException e) {
             if (e.getCause() != null && e.getCause() instanceof SocketTimeoutException) {
-                throw new DataRetrievalFailureException("timeout: " + e.getMessage(), e);
+                throw new AuthenticationServiceException("timeout: " + e.getMessage(), e);
             } else {
                 LOG.log(Level.WARNING, "the answer from jira is unexpected: " + e.getMessage(), e);
-                throw new DataRetrievalFailureException("format error: " + e.getMessage(), e);
+                throw new AuthenticationServiceException("format error: " + e.getMessage(), e);
             }
         } catch (UniformInterfaceException e) {
             if (e.getMessage().contains("403")) {
-                LOG.fine("Authenticate user '" + pUsername + "' failed with HTTP 403'");
-                throw new UsernameNotFoundException(pUsername, e);
+                throw new BadCredentialsException("User does not exist (HTTP 403): " + pUsername, e);
+            } else if (e.getMessage().contains("401")) {
+                throw new BadCredentialsException("User is not allowed (HTTP 401): " + pUsername, e);
+            } else {
+                LOG.log(Level.WARNING, "response error: " + e.getMessage(), e);
+                throw new AuthenticationServiceException("response error: " + e.getMessage(), e);
             }
-            throw new DataRetrievalFailureException("response error: " + e.getMessage(), e);
         } catch (Exception e) {
-            throw new DataRetrievalFailureException("general error: " + e.getMessage(), e);
+            throw new AuthenticationServiceException("general error: " + e.getMessage(), e);
         }
-
     }
 
-    private void init() {
+    void init() {
         // Create a trust manager that does not validate certificate chains
         TrustManager[] trustAllCerts = new TrustManager[] {new X509TrustManager() {
             public X509Certificate[] getAcceptedIssuers() {

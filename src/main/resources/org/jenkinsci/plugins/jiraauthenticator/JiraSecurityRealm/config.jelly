@@ -19,11 +19,19 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 -->
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define"
-	xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form">
+	xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form" xmlns:c="/lib/credentials">
 	<f:entry title="${%URL}" field="url">
+		<f:textbox />
+	</f:entry>
+    
+    <f:entry title="${%Credentials}" field="credentialsId">
+        <c:select/>
+    </f:entry>
+    
+    <f:entry title="${%Timeout}" field="timeout">
 		<f:textbox />
 	</f:entry>
 	
 	<f:validateButton method="testConnection" title="${%Check Connection}"
-		with="url" />
+		with="url,technicalUserName,technicalUserPassword,timeout" />
 </j:jelly>
