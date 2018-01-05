@@ -12,9 +12,9 @@ This Plugin for Jenkins will provide a Security Realm which allows to do the use
 Therefore this plugin makes use of the Jira RESTful API and will try to retrieve the user with all his groups from Jira. 
 
 ## Why do you want to use this plugin?
-In our company we do have multiple LDAP servers that are hidden behind a lot of firewalls. In our Jira instance all the users from all the departments and countries can work together. Also we are managing some user-groups in Jira to grant access to different projects. Therefore we have written this tiny plugin as a Proof-of-Concept to utilize Jira as an authentication system.
+In our company we do have multiple LDAP servers that are hidden behind a lot of firewalls. In our Jira instance all the users from all the departments and countries can work together. Also we are managing some user-groups in Jira to grant access to different projects. Therefore we have written this tiny plugin as a Proof-of-Concept to utilize Jira as an authentication and authoriation system.
 
-One advantage is, that we can manage the groups in Jira by ourselves and don't rely on the Active-Directory administrators. One drawback is, that the availability for Jira isn't the same as for the LDAP.
+One advantage is, that we can manage the groups in Jira by ourselves and don't rely on the Active-Directory administrators. Another advantage is that you don't need to do any configuration inside Jira to use this plugin. One drawback is, that the availability for Jira isn't the same as for the LDAP.
 
 ## Configuration Example
 ![Alt text](/src/site/resources/project-config-1.jpg?raw=true "Example Project Configuration")
