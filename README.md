@@ -17,7 +17,7 @@ In our company we do have multiple LDAP servers that are hidden behind a lot of 
 One advantage is, that we can manage the groups in Jira by ourselves and don't rely on the Active-Directory administrators. Another advantage is that you don't need to do any configuration inside Jira to use this plugin. One drawback is, that the availability for Jira isn't the same as for the LDAP.
 
 ## Configuration Example
-![Alt text](/src/site/resources/project-config-1.jpg?raw=true "Example Project Configuration")
+![Alt text](/src/site/resources/security-realm-config-1.jpg?raw=true "Example Project Configuration")
 
 ## Documentation
 The user documentation is available here
