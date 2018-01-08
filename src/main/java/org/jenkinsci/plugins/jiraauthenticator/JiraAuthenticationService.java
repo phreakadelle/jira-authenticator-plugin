@@ -1,7 +1,8 @@
 package org.jenkinsci.plugins.jiraauthenticator;
 
 import java.net.SocketTimeoutException;
-import java.security.SecureRandom;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
 import java.security.cert.X509Certificate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -29,6 +30,9 @@ import com.sun.jersey.api.client.WebResource;
 import com.sun.jersey.api.client.config.ClientConfig;
 import com.sun.jersey.api.client.config.DefaultClientConfig;
 import com.sun.jersey.api.client.filter.HTTPBasicAuthFilter;
+import com.sun.jersey.client.urlconnection.HTTPSProperties;
+
+import hudson.util.Secret;
 
 /**
  * Service class wraps the functionality to connect to a Jira instance. This class makes use of a technical user that is
@@ -46,7 +50,7 @@ public class JiraAuthenticationService {
     private static final Logger LOG = Logger.getLogger(JiraSecurityRealm.class.getName());
     private final String mUrl;
     private final String mTechnicalUserName;
-    private final String mTechnicalUserPassword;
+    private final Secret mTechnicalUserPassword;
     private final Integer mTimeoutInMS;
 
     /**
@@ -61,13 +65,12 @@ public class JiraAuthenticationService {
      * @param pTimeoutInMS
      *            timeout in MS
      */
-    public JiraAuthenticationService(String url, String pTechnicalUserName, String pTechnicalUserPassword, Integer pTimeoutInMS) {
+    public JiraAuthenticationService(String url, String pTechnicalUserName, Secret pTechnicalUserPassword, Integer pTimeoutInMS) {
         super();
         this.mUrl = url;
         this.mTechnicalUserName = pTechnicalUserName;
         this.mTechnicalUserPassword = pTechnicalUserPassword;
         this.mTimeoutInMS = pTimeoutInMS;
-        init();
     }
 
     /**
@@ -85,7 +88,7 @@ public class JiraAuthenticationService {
         requestParams.putSingle(PARAM_KEY_EXPAND, PARAM_VAL_GROUPS);
 
         // use the technical user to retrieve the groups of a given username.
-        return callService(mTechnicalUserName, mTechnicalUserPassword, requestParams);
+        return callService(mTechnicalUserName, mTechnicalUserPassword.getPlainText(), requestParams);
     }
 
     /**
@@ -109,7 +112,7 @@ public class JiraAuthenticationService {
 
     JiraResponseGeneral callService(final String pUsername, final String pPassword, MultivaluedMap<String, String> pRequestParams) {
         try {
-            ClientConfig config = new DefaultClientConfig();
+            ClientConfig config = initSSLConfig();
             Client client = Client.create(config);
 
             if (StringUtils.isNotEmpty(pUsername) && StringUtils.isNotEmpty(pPassword)) {
@@ -156,12 +159,10 @@ public class JiraAuthenticationService {
         }
     }
 
-    /**
-     * To accept all (self-signed) HTTPs certificates.
-     */
-    void init() {
-        // Create a trust manager that does not validate certificate chains
-        TrustManager[] trustAllCerts = new TrustManager[] {new X509TrustManager() {
+    private ClientConfig initSSLConfig() throws NoSuchAlgorithmException, KeyManagementException {
+        final ClientConfig config = new DefaultClientConfig();
+        SSLContext ctx = SSLContext.getInstance("SSL");
+        ctx.init(null, new TrustManager[] {new X509TrustManager() {
             public X509Certificate[] getAcceptedIssuers() {
                 return null;
             }
@@ -171,16 +172,9 @@ public class JiraAuthenticationService {
 
             public void checkServerTrusted(X509Certificate[] certs, String authType) {
             }
-        }};
-
-        // Install the all-trusting trust manager
-        try {
-            SSLContext sc = SSLContext.getInstance("TLS");
-            sc.init(null, trustAllCerts, new SecureRandom());
-            HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
-        } catch (Exception e) {
-            LOG.fine(e.getMessage());
-        }
+        }}, null);
+        config.getProperties().put(HTTPSProperties.PROPERTY_HTTPS_PROPERTIES, new HTTPSProperties(HttpsURLConnection.getDefaultHostnameVerifier(), ctx));
+        return config;
     }
 
 }

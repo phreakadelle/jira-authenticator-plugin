@@ -69,12 +69,12 @@ public class JiraSecurityRealm extends AbstractPasswordBasedSecurityRealm {
 
         try {
             final UsernamePasswordCredentialsImpl c = getCredentials(getCredentialsId());
-            JiraAuthenticationService service = new JiraAuthenticationService(url, c.getUsername(), c.getPassword().getPlainText(), timeout);
+            JiraAuthenticationService service = new JiraAuthenticationService(url, c.getUsername(), c.getPassword(), timeout);
             JiraResponseGeneral serviceResponse = service.authenticate(pUsername, pPassword);
 
             final List<GrantedAuthority> authorities = new ArrayList<GrantedAuthority>();
             authorities.add(SecurityRealm.AUTHENTICATED_AUTHORITY);
-            return new JiraUser(serviceResponse.getName(), pPassword, authorities);
+            return new JiraUser(serviceResponse.getName(), authorities);
         } catch (AuthenticationException e) {
             if (LOG.isLoggable(Level.FINE)) {
                 LOG.log(Level.FINE, e.getMessage(), e);
@@ -99,7 +99,7 @@ public class JiraSecurityRealm extends AbstractPasswordBasedSecurityRealm {
 
         try {
             final UsernamePasswordCredentialsImpl c = getCredentials(getCredentialsId());
-            JiraAuthenticationService service = new JiraAuthenticationService(url, c.getUsername(), c.getPassword().getPlainText(), timeout);
+            JiraAuthenticationService service = new JiraAuthenticationService(url, c.getUsername(), c.getPassword(), timeout);
             JiraResponseGeneral serviceResponse = service.loadUserByUsername(pUsername);
 
             final List<GrantedAuthority> authorities = new ArrayList<GrantedAuthority>();
@@ -109,7 +109,7 @@ public class JiraSecurityRealm extends AbstractPasswordBasedSecurityRealm {
                 authorities.add(new GrantedAuthorityImpl(current.getName()));
             }
 
-            return new JiraUser(serviceResponse.getName(), "", authorities);
+            return new JiraUser(serviceResponse.getName(), authorities);
         } catch (AuthenticationException e) {
             if (LOG.isLoggable(Level.FINE)) {
                 LOG.log(Level.FINE, e.getMessage(), e);
@@ -182,7 +182,7 @@ public class JiraSecurityRealm extends AbstractPasswordBasedSecurityRealm {
 
         public FormValidation doTestConnection(@QueryParameter String url, @QueryParameter final String credentialsId, @QueryParameter final Integer timeout) {
             final UsernamePasswordCredentialsImpl c = getCredentials(credentialsId);
-            JiraAuthenticationService service = new JiraAuthenticationService(url, c.getUsername(), c.getPassword().getPlainText(), timeout);
+            JiraAuthenticationService service = new JiraAuthenticationService(url, c.getUsername(), c.getPassword(), timeout);
             try {
                 service.authenticate(c.getUsername(), c.getPassword().getPlainText());
                 return FormValidation.ok("Connection successful");
