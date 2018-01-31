@@ -1,3 +1,4 @@
+<?jelly escape-by-default='true'?>
 <div>
   This plugin provides a SecurityRealm which allows to authenticate users against a Jira instance. 
   This plugin requires a technical user to perform the authorize and authentication. 

@@ -52,11 +52,12 @@ public class JiraAuthenticationService {
     private final String mTechnicalUserName;
     private final Secret mTechnicalUserPassword;
     private final Integer mTimeoutInMS;
+    private final boolean mInsecureConnection;
 
     /**
      * Default constructor.
      * 
-     * @param url
+     * @param pURL
      *            the URL of Jira.
      * @param pTechnicalUserName
      *            technical user name
@@ -64,13 +65,16 @@ public class JiraAuthenticationService {
      *            password of the technical user.
      * @param pTimeoutInMS
      *            timeout in MS
+     * @param pInsecureConnections
+     *            TRUE to allow insecure TLS connections.
      */
-    public JiraAuthenticationService(String url, String pTechnicalUserName, Secret pTechnicalUserPassword, Integer pTimeoutInMS) {
+    public JiraAuthenticationService(String pURL, String pTechnicalUserName, Secret pTechnicalUserPassword, Integer pTimeoutInMS, boolean pInsecureConnections) {
         super();
-        this.mUrl = url;
+        this.mUrl = pURL;
         this.mTechnicalUserName = pTechnicalUserName;
         this.mTechnicalUserPassword = pTechnicalUserPassword;
         this.mTimeoutInMS = pTimeoutInMS;
+        this.mInsecureConnection = pInsecureConnections;
     }
 
     /**
@@ -112,7 +116,7 @@ public class JiraAuthenticationService {
 
     JiraResponseGeneral callService(final String pUsername, final String pPassword, MultivaluedMap<String, String> pRequestParams) {
         try {
-            ClientConfig config = initSSLConfig();
+            ClientConfig config = initSSLConfig(mInsecureConnection);
             Client client = Client.create(config);
 
             if (StringUtils.isNotEmpty(pUsername) && StringUtils.isNotEmpty(pPassword)) {
@@ -159,21 +163,26 @@ public class JiraAuthenticationService {
         }
     }
 
-    private ClientConfig initSSLConfig() throws NoSuchAlgorithmException, KeyManagementException {
+    ClientConfig initSSLConfig(boolean pAllowInsecureConnections) throws NoSuchAlgorithmException, KeyManagementException {
         final ClientConfig config = new DefaultClientConfig();
-        SSLContext ctx = SSLContext.getInstance("SSL");
-        ctx.init(null, new TrustManager[] {new X509TrustManager() {
-            public X509Certificate[] getAcceptedIssuers() {
-                return null;
-            }
+        if (pAllowInsecureConnections) {
+            LOG.log(Level.INFO, "connection to Jira services is using an insecure connection");
+            SSLContext ctx = SSLContext.getInstance("SSL");
+            ctx.init(null, new TrustManager[] {new X509TrustManager() {
+                public X509Certificate[] getAcceptedIssuers() {
+                    return null;
+                }
 
-            public void checkClientTrusted(X509Certificate[] certs, String authType) {
-            }
+                public void checkClientTrusted(X509Certificate[] certs, String authType) {
+                }
 
-            public void checkServerTrusted(X509Certificate[] certs, String authType) {
-            }
-        }}, null);
-        config.getProperties().put(HTTPSProperties.PROPERTY_HTTPS_PROPERTIES, new HTTPSProperties(HttpsURLConnection.getDefaultHostnameVerifier(), ctx));
+                public void checkServerTrusted(X509Certificate[] certs, String authType) {
+                }
+            }}, null);
+            config.getProperties().put(HTTPSProperties.PROPERTY_HTTPS_PROPERTIES, new HTTPSProperties(HttpsURLConnection.getDefaultHostnameVerifier(), ctx));
+        } else {
+            LOG.log(Level.FINER, "connection to Jira services is secured");
+        }
         return config;
     }
 

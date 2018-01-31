@@ -53,12 +53,14 @@ public class JiraSecurityRealm extends AbstractPasswordBasedSecurityRealm {
     private String url;
     private String credentialsId;
     private Integer timeout;
+    private boolean insecureConnection;
 
     @DataBoundConstructor
-    public JiraSecurityRealm(String url, String credentialsId, Integer timeout) {
+    public JiraSecurityRealm(String url, String credentialsId, Integer timeout, boolean insecureConnection) {
         this.url = url;
         this.credentialsId = credentialsId;
         this.timeout = timeout;
+        this.insecureConnection = insecureConnection;
     }
 
     @Override
@@ -69,7 +71,7 @@ public class JiraSecurityRealm extends AbstractPasswordBasedSecurityRealm {
 
         try {
             final UsernamePasswordCredentialsImpl c = getCredentials(getCredentialsId());
-            JiraAuthenticationService service = new JiraAuthenticationService(url, c.getUsername(), c.getPassword(), timeout);
+            JiraAuthenticationService service = new JiraAuthenticationService(url, c.getUsername(), c.getPassword(), timeout, insecureConnection);
             JiraResponseGeneral serviceResponse = service.authenticate(pUsername, pPassword);
 
             final List<GrantedAuthority> authorities = new ArrayList<GrantedAuthority>();
@@ -92,14 +94,14 @@ public class JiraSecurityRealm extends AbstractPasswordBasedSecurityRealm {
             LOG.fine("loadUserByUsername '" + pUsername + "'");
         }
 
-        // FIXME: Why does Jenkins call it like this.
+        // FIXME: Why does Jenkins call it like this?
         if ("MANAGE_DOMAINS".equalsIgnoreCase(pUsername)) {
             throw new UsernameNotFoundException("not supported");
         }
 
         try {
             final UsernamePasswordCredentialsImpl c = getCredentials(getCredentialsId());
-            JiraAuthenticationService service = new JiraAuthenticationService(url, c.getUsername(), c.getPassword(), timeout);
+            JiraAuthenticationService service = new JiraAuthenticationService(url, c.getUsername(), c.getPassword(), timeout, insecureConnection);
             JiraResponseGeneral serviceResponse = service.loadUserByUsername(pUsername);
 
             final List<GrantedAuthority> authorities = new ArrayList<GrantedAuthority>();
@@ -176,13 +178,23 @@ public class JiraSecurityRealm extends AbstractPasswordBasedSecurityRealm {
         }
 
         public ListBoxModel doFillCredentialsIdItems(@AncestorInPath Item instance) {
+            if (!Jenkins.getInstance().hasPermission(Jenkins.ADMINISTER)) {
+                LOG.fine("user has not the necessary permission to execute this function");
+                return new StandardListBoxModel().includeEmptyValue();
+            }
+
             return new StandardListBoxModel().includeEmptyValue().includeMatchingAs(ACL.SYSTEM, (hudson.model.Item) instance, StandardUsernamePasswordCredentials.class,
                     Collections.<DomainRequirement> emptyList(), CredentialsMatchers.instanceOf(StandardUsernamePasswordCredentials.class));
         }
 
-        public FormValidation doTestConnection(@QueryParameter String url, @QueryParameter final String credentialsId, @QueryParameter final Integer timeout) {
+        public FormValidation doTestConnection(@QueryParameter String url, @QueryParameter final String credentialsId, @QueryParameter final Integer timeout,
+                @QueryParameter final boolean insecureConnection) {
+            if (!Jenkins.getInstance().hasPermission(Jenkins.ADMINISTER)) {
+                return FormValidation.error("You are not allowed to execute this method.");
+            }
+
             final UsernamePasswordCredentialsImpl c = getCredentials(credentialsId);
-            JiraAuthenticationService service = new JiraAuthenticationService(url, c.getUsername(), c.getPassword(), timeout);
+            JiraAuthenticationService service = new JiraAuthenticationService(url, c.getUsername(), c.getPassword(), timeout, insecureConnection);
             try {
                 service.authenticate(c.getUsername(), c.getPassword().getPlainText());
                 return FormValidation.ok("Connection successful");
@@ -220,6 +232,10 @@ public class JiraSecurityRealm extends AbstractPasswordBasedSecurityRealm {
     public Integer getTimeout() {
         return timeout;
     }
+    
+    public boolean isInsecureConnection() {
+        return insecureConnection;
+    }
 
     @DataBoundSetter
     public void setCredentialsId(String credentialsId) {
@@ -235,5 +251,12 @@ public class JiraSecurityRealm extends AbstractPasswordBasedSecurityRealm {
     public void setUrl(String url) {
         this.url = url;
     }
+   
+    @DataBoundSetter
+    public void setInsecureConnection(boolean insecureConnections) {
+        this.insecureConnection = insecureConnections;
+    }
+    
+    
 
 }
