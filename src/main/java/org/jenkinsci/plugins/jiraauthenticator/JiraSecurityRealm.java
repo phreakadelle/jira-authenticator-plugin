@@ -33,6 +33,7 @@ import hudson.model.Descriptor;
 import hudson.security.ACL;
 import hudson.security.AbstractPasswordBasedSecurityRealm;
 import hudson.security.GroupDetails;
+import hudson.security.Permission;
 import hudson.security.SecurityRealm;
 import hudson.util.FormValidation;
 import hudson.util.ListBoxModel;
@@ -178,20 +179,14 @@ public class JiraSecurityRealm extends AbstractPasswordBasedSecurityRealm {
         }
 
         public ListBoxModel doFillCredentialsIdItems(@AncestorInPath Item instance) {
-            if (!Jenkins.getInstance().hasPermission(Jenkins.ADMINISTER)) {
-                LOG.fine("user has not the necessary permission to execute this function");
-                return new StandardListBoxModel().includeEmptyValue();
-            }
-
+            Jenkins.getInstance().checkPermission(jenkins.model.Jenkins.ADMINISTER);
             return new StandardListBoxModel().includeEmptyValue().includeMatchingAs(ACL.SYSTEM, (hudson.model.Item) instance, StandardUsernamePasswordCredentials.class,
                     Collections.<DomainRequirement> emptyList(), CredentialsMatchers.instanceOf(StandardUsernamePasswordCredentials.class));
         }
 
         public FormValidation doTestConnection(@QueryParameter String url, @QueryParameter final String credentialsId, @QueryParameter final Integer timeout,
                 @QueryParameter final boolean insecureConnection) {
-            if (!Jenkins.getInstance().hasPermission(Jenkins.ADMINISTER)) {
-                return FormValidation.error("You are not allowed to execute this method.");
-            }
+            Jenkins.getInstance().checkPermission(jenkins.model.Jenkins.ADMINISTER);
 
             final UsernamePasswordCredentialsImpl c = getCredentials(credentialsId);
             JiraAuthenticationService service = new JiraAuthenticationService(url, c.getUsername(), c.getPassword(), timeout, insecureConnection);
