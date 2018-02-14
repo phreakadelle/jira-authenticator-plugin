@@ -36,13 +36,14 @@ public class Groups {
 
     @Override
     public String toString() {
-        String retVal = "Groups [size=" + size + ", Items [";
+        StringBuffer sb = new StringBuffer();
+        sb.append("Groups [size=" + size + ", Items [");
         for (Item current : getItems()) {
-            retVal += current.toString() + ", ";
+            sb.append(current.toString()).append(", ");
         }
-        retVal += " ]";
+        sb.append(" ]");
 
-        return retVal;
+        return sb.toString();
     }
 
 }

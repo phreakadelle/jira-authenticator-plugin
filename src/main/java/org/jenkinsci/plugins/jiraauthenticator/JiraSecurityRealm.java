@@ -33,7 +33,6 @@ import hudson.model.Descriptor;
 import hudson.security.ACL;
 import hudson.security.AbstractPasswordBasedSecurityRealm;
 import hudson.security.GroupDetails;
-import hudson.security.Permission;
 import hudson.security.SecurityRealm;
 import hudson.util.FormValidation;
 import hudson.util.ListBoxModel;
@@ -178,9 +177,9 @@ public class JiraSecurityRealm extends AbstractPasswordBasedSecurityRealm {
             return FormValidation.ok();
         }
 
-        public ListBoxModel doFillCredentialsIdItems(@AncestorInPath Item instance) {
+        public ListBoxModel doFillCredentialsIdItems(@AncestorInPath hudson.model.Item instance) {
             Jenkins.getInstance().checkPermission(jenkins.model.Jenkins.ADMINISTER);
-            return new StandardListBoxModel().includeEmptyValue().includeMatchingAs(ACL.SYSTEM, (hudson.model.Item) instance, StandardUsernamePasswordCredentials.class,
+            return new StandardListBoxModel().includeEmptyValue().includeMatchingAs(ACL.SYSTEM, instance, StandardUsernamePasswordCredentials.class,
                     Collections.<DomainRequirement> emptyList(), CredentialsMatchers.instanceOf(StandardUsernamePasswordCredentials.class));
         }
 
